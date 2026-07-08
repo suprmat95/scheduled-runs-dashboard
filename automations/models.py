@@ -4,9 +4,16 @@ from django.db import models
 from django.utils import timezone
 
 try:
-    from cron_descriptor import get_description
+    from cron_descriptor import Options, get_description
+
+    # Force a single locale so the rendered text is consistent regardless of the
+    # server's environment (otherwise cron_descriptor auto-detects and can mix
+    # languages, e.g. "Alle 09:00, solo il Monday").
+    _CRON_OPTS = Options()
+    _CRON_OPTS.locale_code = "en_US"
 except ImportError:  # cron_descriptor is optional (nice-to-have display)
     get_description = None
+    _CRON_OPTS = None
 
 
 def validate_crontab(value):
@@ -19,7 +26,17 @@ def validate_crontab(value):
 
 
 class Automation(models.Model):
-    """A scheduled automation (Zapier-style), scheduled via a crontab expression."""
+    """A scheduled automation (Zapier-style), scheduled via a crontab expression.
+
+    Built to stay fast at high row counts: the fields the dashboard filters and
+    sorts on — `next_run` and `last_run` — are *denormalized* onto the row
+    (instead of being recomputed from the runs table or the crontab on every
+    request). This trades a little write-time work for indexed, N+1-free reads:
+
+      - `next_run_at`  is recomputed from the crontab on `save()`.
+      - `last_run_at` / `last_run_status` are kept in sync by signals whenever an
+        AutomationRun is created/updated/deleted (see signals.py).
+    """
 
     name = models.CharField(max_length=200)
     # Celery Beat / cron style: "minute hour day-of-month month day-of-week"
@@ -30,8 +47,16 @@ class Automation(models.Model):
         validators=[validate_crontab],
         help_text='Crontab expression, e.g. "0 9 * * 1" for every Monday at 09:00.',
     )
-    active = models.BooleanField(default=True)
+    active = models.BooleanField(default=True, db_index=True)
     start_date = models.DateTimeField(default=timezone.now)
+
+    # --- denormalized, indexed columns for fast listing / filtering / sorting ---
+    next_run_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_run_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_run_status = models.CharField(
+        max_length=20, null=True, blank=True, db_index=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -41,32 +66,47 @@ class Automation(models.Model):
     def __str__(self):
         return self.name
 
+    # ------------------------------------------------------------------ display
     @property
     def schedule_display(self):
         """Human-readable schedule, e.g. 'At 09:00, only on Monday'."""
         if get_description is not None:
             try:
-                return get_description(self.crontab)
+                return get_description(self.crontab, _CRON_OPTS)
             except Exception:
                 pass
         return self.crontab
 
-    @property
-    def next_run(self):
-        """Next scheduled run, computed on the fly from the crontab.
-
-        Derived (not stored) so it's always fresh — no scheduler needed to keep
-        a DB column in sync. Returns None when the automation is inactive.
-        """
+    # ------------------------------------------------------- denormalization ---
+    def compute_next_run(self):
+        """Next scheduled firing from the crontab, or None when inactive."""
         if not self.active:
             return None
         now = timezone.now()
         return croniter(self.crontab, now).get_next(type(now))
 
-    @property
-    def last_run(self):
-        """Most recent run for this automation, or None."""
-        return self.runs.order_by("-ran_at").first()
+    def save(self, *args, **kwargs):
+        # Recompute the crontab-derived field on every save. last_run_* is owned
+        # by sync_last_run() (signal-driven), so it's read as-is here.
+        self.next_run_at = self.compute_next_run()
+        super().save(*args, **kwargs)
+
+    def sync_last_run(self):
+        """Refresh the denormalized last-run columns from the runs table.
+
+        Called by signals when this automation's runs change. Uses a narrow
+        `update_fields` save so it never recurses into next_run recomputation.
+        """
+        latest = self.runs.order_by("-ran_at").first()
+        self.last_run_at = latest.ran_at if latest else None
+        self.last_run_status = latest.status if latest else None
+        super().save(
+            update_fields=[
+                "last_run_at",
+                "last_run_status",
+                "updated_at",
+            ]
+        )
 
 
 class AutomationRun(models.Model):
@@ -79,7 +119,7 @@ class AutomationRun(models.Model):
     automation = models.ForeignKey(
         Automation, related_name="runs", on_delete=models.CASCADE
     )
-    ran_at = models.DateTimeField(default=timezone.now)
+    ran_at = models.DateTimeField(default=timezone.now, db_index=True)
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.SUCCESS
     )

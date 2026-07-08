@@ -10,8 +10,16 @@ class AutomationRunInline(admin.TabularInline):
 
 @admin.register(Automation)
 class AutomationAdmin(admin.ModelAdmin):
-    list_display = ("name", "crontab", "schedule_display", "active", "next_run")
-    list_filter = ("active",)
+    list_display = (
+        "name",
+        "crontab",
+        "schedule_display",
+        "active",
+        "next_run_at",
+        "last_run_at",
+        "last_run_status",
+    )
+    list_filter = ("active", "last_run_status")
     search_fields = ("name",)
     inlines = [AutomationRunInline]
 

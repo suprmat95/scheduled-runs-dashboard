@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
 
 from croniter import croniter_range
-from django.db.models import OuterRef, Subquery
+from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-from rest_framework import status, viewsets
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -37,10 +37,19 @@ def _parse_bool(value):
 
 
 class AutomationViewSet(viewsets.ModelViewSet):
-    """Full CRUD for automations, plus KPIs and run-recording endpoints."""
+    """Full CRUD for automations, plus KPIs and run-recording endpoints.
+
+    Reads are built for high row counts: the list is paginated (settings.py),
+    filtering is done on indexed columns, and the KPIs are one aggregate query.
+    """
 
     queryset = Automation.objects.all()
     serializer_class = AutomationSerializer
+
+    # `?ordering=` over the columns below.
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ["name", "next_run_at", "last_run_at", "active"]
+    ordering = ["name"]
 
     def get_queryset(self):
         """List automations, optionally filtered by query params.
@@ -49,24 +58,9 @@ class AutomationViewSet(viewsets.ModelViewSet):
           - active=true|false               -> only active / inactive automations
           - last_run_status=success|failed  -> filter on the most recent run's status
 
-        Why this is hand-rolled instead of DjangoFilterBackend/filterset_fields:
-        the two filters are not the same kind of thing.
-
-          - `active` IS a real model field, so the filtering itself is just the
-            ORM's `.filter(active=...)`. The only extra work is parsing the query
-            param: everything in the URL arrives as a string ("?active=false"
-            gives the string "false", which is truthy in Python), so we convert it
-            to a real bool before filtering.
-
-          - `last_run_status` is NOT a model field. It's derived — the status of
-            the latest related AutomationRun — so `.filter(last_run_status=...)`
-            can't work (no such column). We resolve it with a correlated subquery
-            that pulls the most recent run's status per automation, keeping the
-            filter at the DB level instead of loading rows into Python.
-
-        Since `last_run_status` needs custom logic regardless, both filters live
-        here together rather than splitting them across an extra dependency
-        (django-filter) for one and custom code for the other.
+        Both are now plain indexed-column lookups: `active` is a real field, and
+        `last_run_status` is denormalized onto the row (kept in sync by signals),
+        so neither needs a join or a correlated subquery.
         """
         qs = super().get_queryset()
 
@@ -86,34 +80,34 @@ class AutomationViewSet(viewsets.ModelViewSet):
                 raise ValidationError(
                     {"last_run_status": [f"Expected one of: {', '.join(sorted(valid))}."]}
                 )
-            latest_status = (
-                AutomationRun.objects.filter(automation=OuterRef("pk"))
-                .order_by("-ran_at")
-                .values("status")[:1]
-            )
-            qs = qs.annotate(_last_run_status=Subquery(latest_status)).filter(
-                _last_run_status=status_raw
-            )
+            qs = qs.filter(last_run_status=status_raw)
 
         return qs
 
     @action(detail=False, methods=["get"])
     def kpis(self, request):
-        """Summary KPIs: total, active, and success rate over last runs."""
-        automations = list(Automation.objects.all())
-        total = len(automations)
-        active = sum(1 for a in automations if a.active)
+        """Summary KPIs: total, active, and success rate over last runs.
 
-        last_runs = [a.last_run for a in automations if a.last_run is not None]
-        successful = sum(
-            1 for r in last_runs if r.status == AutomationRun.Status.SUCCESS
+        A single aggregate query — O(1) work in Python regardless of row count.
+        """
+        agg = Automation.objects.aggregate(
+            total=Count("id"),
+            active=Count("id", filter=Q(active=True)),
+            successful=Count(
+                "id", filter=Q(last_run_status=AutomationRun.Status.SUCCESS)
+            ),
+            with_runs=Count("id", filter=Q(last_run_status__isnull=False)),
         )
-        rate = round(successful / len(last_runs) * 100) if last_runs else 0
+        rate = (
+            round(agg["successful"] / agg["with_runs"] * 100)
+            if agg["with_runs"]
+            else 0
+        )
 
         return Response(
             {
-                "total_automations": total,
-                "active_schedules": active,
+                "total_automations": agg["total"],
+                "active_schedules": agg["active"],
                 "success_rate": rate,
             }
         )
@@ -161,10 +155,14 @@ class AutomationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def run(self, request, pk=None):
-        """Record an execution of this automation."""
+        """Record an execution of this automation.
+
+        Creating the run fires the signal that refreshes the automation's
+        denormalized last-run columns, so no manual update is needed here.
+        """
         automation = self.get_object()
-        status = request.data.get("status", AutomationRun.Status.SUCCESS)
-        run = AutomationRun.objects.create(automation=automation, status=status)
+        run_status = request.data.get("status", AutomationRun.Status.SUCCESS)
+        run = AutomationRun.objects.create(automation=automation, status=run_status)
         return Response(AutomationRunSerializer(run).data, status=201)
 
 

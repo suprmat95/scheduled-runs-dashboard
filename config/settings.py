@@ -75,6 +75,10 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
+    # Paginate list endpoints so responses stay bounded at high row counts.
+    # Clients get {count, next, previous, results} and page via ?page= / ?page_size=.
+    "DEFAULT_PAGINATION_CLASS": "config.pagination.DefaultPagination",
+    "PAGE_SIZE": 50,
 }
 
 # No auth required for the exercise: allow the React dev server.

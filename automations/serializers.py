@@ -14,12 +14,14 @@ class AutomationRunSerializer(serializers.ModelSerializer):
 
 
 class AutomationSerializer(serializers.ModelSerializer):
-    """Read/write serializer for an automation, with derived last-run info."""
+    """Read/write serializer for an automation.
 
-    last_run = serializers.SerializerMethodField()
-    last_run_status = serializers.SerializerMethodField()
+    `last_run_at`, `last_run_status` and `next_run_at` are denormalized columns
+    (kept in sync by signals / save), so they're read straight off the row — no
+    per-object query, which keeps list responses N+1-free at scale.
+    """
+
     schedule_display = serializers.CharField(read_only=True)
-    next_run = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = Automation
@@ -30,28 +32,27 @@ class AutomationSerializer(serializers.ModelSerializer):
             "schedule_display",
             "active",
             "start_date",
-            "next_run",
-            "last_run",
+            "next_run_at",
+            "last_run_at",
             "last_run_status",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at"]
+        read_only_fields = [
+            "next_run_at",
+            "last_run_at",
+            "last_run_status",
+            "created_at",
+            "updated_at",
+        ]
 
     def validate_crontab(self, value):
-        from .models import validate_crontab
         from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from .models import validate_crontab
 
         try:
             validate_crontab(value)
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.messages)
         return value
-
-    def get_last_run(self, obj):
-        run = obj.last_run
-        return run.ran_at if run else None
-
-    def get_last_run_status(self, obj):
-        run = obj.last_run
-        return run.status if run else None

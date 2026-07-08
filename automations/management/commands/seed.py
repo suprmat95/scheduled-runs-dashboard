@@ -41,7 +41,8 @@ class Command(BaseCommand):
         yesterday = timezone.localdate() - timezone.timedelta(days=1)
 
         for name, crontab, active in AUTOMATIONS:
-            # next_run is computed automatically in Automation.save() from the crontab.
+            # save() fills next_run_at from the crontab; creating the run below
+            # fires the signal that fills last_run_at / last_run_status.
             automation = Automation.objects.create(
                 name=name,
                 crontab=crontab,
