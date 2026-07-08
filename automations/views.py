@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 from croniter import croniter_range
+from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import status, viewsets
@@ -25,11 +26,76 @@ def _first_firing_in_window(auto_cron, start, end):
     return None
 
 
+def _parse_bool(value):
+    """Parse a query-param boolean, or None if it isn't a recognised value."""
+    lowered = value.strip().lower()
+    if lowered in ("true", "1", "yes"):
+        return True
+    if lowered in ("false", "0", "no"):
+        return False
+    return None
+
+
 class AutomationViewSet(viewsets.ModelViewSet):
     """Full CRUD for automations, plus KPIs and run-recording endpoints."""
 
     queryset = Automation.objects.all()
     serializer_class = AutomationSerializer
+
+    def get_queryset(self):
+        """List automations, optionally filtered by query params.
+
+        Supported filters (used by the frontend's KPI-box interactions):
+          - active=true|false               -> only active / inactive automations
+          - last_run_status=success|failed  -> filter on the most recent run's status
+
+        Why this is hand-rolled instead of DjangoFilterBackend/filterset_fields:
+        the two filters are not the same kind of thing.
+
+          - `active` IS a real model field, so the filtering itself is just the
+            ORM's `.filter(active=...)`. The only extra work is parsing the query
+            param: everything in the URL arrives as a string ("?active=false"
+            gives the string "false", which is truthy in Python), so we convert it
+            to a real bool before filtering.
+
+          - `last_run_status` is NOT a model field. It's derived — the status of
+            the latest related AutomationRun — so `.filter(last_run_status=...)`
+            can't work (no such column). We resolve it with a correlated subquery
+            that pulls the most recent run's status per automation, keeping the
+            filter at the DB level instead of loading rows into Python.
+
+        Since `last_run_status` needs custom logic regardless, both filters live
+        here together rather than splitting them across an extra dependency
+        (django-filter) for one and custom code for the other.
+        """
+        qs = super().get_queryset()
+
+        active_raw = self.request.query_params.get("active")
+        if active_raw is not None:
+            active = _parse_bool(active_raw)
+            if active is None:
+                raise ValidationError(
+                    {"active": ["Expected a boolean: true/false."]}
+                )
+            qs = qs.filter(active=active)
+
+        status_raw = self.request.query_params.get("last_run_status")
+        if status_raw is not None:
+            valid = {s.value for s in AutomationRun.Status}
+            if status_raw not in valid:
+                raise ValidationError(
+                    {"last_run_status": [f"Expected one of: {', '.join(sorted(valid))}."]}
+                )
+            latest_status = (
+                AutomationRun.objects.filter(automation=OuterRef("pk"))
+                .order_by("-ran_at")
+                .values("status")[:1]
+            )
+            qs = qs.annotate(_last_run_status=Subquery(latest_status)).filter(
+                _last_run_status=status_raw
+            )
+
+        return qs
 
     @action(detail=False, methods=["get"])
     def kpis(self, request):
