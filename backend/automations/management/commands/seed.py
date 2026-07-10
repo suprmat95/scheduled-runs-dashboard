@@ -33,7 +33,20 @@ YESTERDAY = {
 class Command(BaseCommand):
     help = "Seed the DB with mockup-coherent automations and runs."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--if-empty",
+            action="store_true",
+            help="Skip seeding when the DB already has automations. Used on "
+            "container startup so an existing (e.g. reviewer-populated) DB "
+            "isn't wiped on every `docker compose up`.",
+        )
+
     def handle(self, *args, **options):
+        if options["if_empty"] and Automation.objects.exists():
+            self.stdout.write("DB already populated; skipping seed.")
+            return
+
         AutomationRun.objects.all().delete()
         Automation.objects.all().delete()
 

@@ -1,0 +1,31 @@
+# One command to run the whole stack: `docker compose up`.
+#   - frontend -> http://localhost:5173
+#   - backend  -> http://localhost:8000/api
+#
+# Dev-mode: source is bind-mounted for live reload, so edits on the host show up
+# without rebuilding. SQLite lives on the host under ./backend/db.sqlite3 (via
+# the bind mount) so it persists across restarts and stays inspectable — which
+# is exactly what the exercise's "share the DB file" asks for.
+
+services:
+  backend:
+    build: ./backend
+    volumes:
+      - ./backend:/app # live code + db.sqlite3 on the host
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # anonymous volume: keep the container's linux deps
+    ports:
+      - "5173:5173"
+    environment:
+      # Reach the backend by its compose service name, and poll for file changes
+      # (macOS bind mounts don't forward fs events into the container).
+      - VITE_API_PROXY_TARGET=http://backend:8000
+      - VITE_USE_POLLING=1
+    depends_on:
+      - backend
