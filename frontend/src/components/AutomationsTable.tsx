@@ -26,6 +26,7 @@ interface Props {
   rows: Automation[];
   search: string;
   onSearchChange: (value: string) => void;
+  onEdit: (automation: Automation) => void;
   onRecordRun: (id: number) => void;
   onDelete: (id: number) => void;
 }
@@ -34,20 +35,21 @@ export function AutomationsTable({
   rows,
   search,
   onSearchChange,
+  onEdit,
   onRecordRun,
   onDelete,
 }: Props) {
   // Row-action menu: track which row's "…" opened it.
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const [menuId, setMenuId] = useState<number | null>(null);
+  const [menuRow, setMenuRow] = useState<Automation | null>(null);
 
-  const openMenu = (e: MouseEvent<HTMLElement>, id: number) => {
+  const openMenu = (e: MouseEvent<HTMLElement>, row: Automation) => {
     setAnchor(e.currentTarget);
-    setMenuId(id);
+    setMenuRow(row);
   };
   const closeMenu = () => {
     setAnchor(null);
-    setMenuId(null);
+    setMenuRow(null);
   };
 
   return (
@@ -136,7 +138,7 @@ export function AutomationsTable({
                   {formatDateTime(a.next_run_at)}
                 </TableCell>
                 <TableCell align="right">
-                  <IconButton size="small" onClick={(e) => openMenu(e, a.id)}>
+                  <IconButton size="small" onClick={(e) => openMenu(e, a)}>
                     <MoreHorizIcon fontSize="small" />
                   </IconButton>
                 </TableCell>
@@ -149,7 +151,15 @@ export function AutomationsTable({
       <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={closeMenu}>
         <MenuItem
           onClick={() => {
-            if (menuId != null) onRecordRun(menuId);
+            if (menuRow) onEdit(menuRow);
+            closeMenu();
+          }}
+        >
+          Edit
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (menuRow) onRecordRun(menuRow.id);
             closeMenu();
           }}
         >
@@ -158,7 +168,7 @@ export function AutomationsTable({
         <MenuItem
           sx={{ color: "error.main" }}
           onClick={() => {
-            if (menuId != null) onDelete(menuId);
+            if (menuRow) onDelete(menuRow.id);
             closeMenu();
           }}
         >

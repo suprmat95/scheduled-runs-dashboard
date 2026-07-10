@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
@@ -12,66 +12,81 @@ import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
-import { useCreateAutomation } from "../hooks";
+import type { Automation } from "../api/types";
+import { useCreateAutomation, useUpdateAutomation } from "../hooks";
 import {
   REPETITION_OPTIONS,
+  crontabToForm,
   repetitionToCrontab,
   type Repetition,
 } from "../lib/cron";
+import { toDatetimeLocal } from "../lib/dates";
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  // When set, the dialog edits this automation; otherwise it creates a new one.
+  automation?: Automation | null;
 }
 
-// A local datetime-local value ("YYYY-MM-DDTHH:MM") for the default field value.
 function defaultStart(): string {
   const d = new Date();
   d.setSeconds(0, 0);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours(),
-  )}:${pad(d.getMinutes())}`;
+  return toDatetimeLocal(d);
 }
 
-export function CreateAutomationDialog({ open, onClose }: Props) {
+export function AutomationDialog({ open, onClose, automation }: Props) {
+  const isEdit = Boolean(automation);
+
   const [name, setName] = useState("");
   const [repetition, setRepetition] = useState<Repetition>("daily");
   const [startDate, setStartDate] = useState(defaultStart);
   const [active, setActive] = useState(true);
 
   const create = useCreateAutomation();
+  const update = useUpdateAutomation();
+  const mutation = isEdit ? update : create;
 
-  const reset = () => {
-    setName("");
-    setRepetition("daily");
-    setStartDate(defaultStart());
-    setActive(true);
+  // Populate the form whenever the dialog opens: from the automation in edit
+  // mode (reverse-mapping the crontab), or blank defaults in create mode.
+  useEffect(() => {
+    if (!open) return;
+    if (automation) {
+      const form = crontabToForm(automation.crontab, automation.start_date);
+      setName(automation.name);
+      setRepetition(form?.repetition ?? "daily");
+      setStartDate(form ? toDatetimeLocal(form.startDate) : defaultStart());
+      setActive(automation.active);
+    } else {
+      setName("");
+      setRepetition("daily");
+      setStartDate(defaultStart());
+      setActive(true);
+    }
     create.reset();
-  };
+    update.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, automation]);
 
   const handleClose = () => {
-    if (create.isPending) return;
-    reset();
+    if (mutation.isPending) return;
     onClose();
   };
 
   const handleSubmit = () => {
     const start = new Date(startDate);
-    create.mutate(
-      {
-        name: name.trim(),
-        crontab: repetitionToCrontab(repetition, start),
-        start_date: start.toISOString(),
-        active,
-      },
-      {
-        onSuccess: () => {
-          reset();
-          onClose();
-        },
-      },
-    );
+    const input = {
+      name: name.trim(),
+      crontab: repetitionToCrontab(repetition, start),
+      start_date: start.toISOString(),
+      active,
+    };
+    const onSuccess = () => onClose();
+    if (isEdit && automation) {
+      update.mutate({ id: automation.id, input }, { onSuccess });
+    } else {
+      create.mutate(input, { onSuccess });
+    }
   };
 
   const canSubmit = name.trim().length > 0 && startDate.length > 0;
@@ -79,9 +94,11 @@ export function CreateAutomationDialog({ open, onClose }: Props) {
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
       <DialogTitle>
-        Create Automation
+        {isEdit ? "Edit Automation" : "Create Automation"}
         <Typography variant="body2" color="text.secondary">
-          Fill in the form below to create a new automation
+          {isEdit
+            ? "Update the automation's details below"
+            : "Fill in the form below to create a new automation"}
         </Typography>
       </DialogTitle>
       <DialogContent>
@@ -124,23 +141,27 @@ export function CreateAutomationDialog({ open, onClose }: Props) {
             }
             label="Active"
           />
-          {create.isError && (
+          {mutation.isError && (
             <Alert severity="error">
-              Could not create the automation. Please try again.
+              Could not save the automation. Please try again.
             </Alert>
           )}
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={handleClose} disabled={create.isPending}>
+        <Button onClick={handleClose} disabled={mutation.isPending}>
           Cancel
         </Button>
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={!canSubmit || create.isPending}
+          disabled={!canSubmit || mutation.isPending}
         >
-          {create.isPending ? "Creating…" : "Create"}
+          {mutation.isPending
+            ? "Saving…"
+            : isEdit
+              ? "Save changes"
+              : "Create"}
         </Button>
       </DialogActions>
     </Dialog>

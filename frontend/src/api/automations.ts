@@ -48,6 +48,14 @@ export async function createAutomation(
   return data;
 }
 
+export async function updateAutomation(
+  id: number,
+  input: CreateAutomationInput,
+): Promise<Automation> {
+  const { data } = await api.patch<Automation>(`/automations/${id}/`, input);
+  return data;
+}
+
 export async function recordRun(
   id: number,
   status: "success" | "failed" = "success",

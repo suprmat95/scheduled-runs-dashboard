@@ -3,8 +3,9 @@ import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
 
+import type { Automation } from "./api/types";
+import { AutomationDialog } from "./components/AutomationDialog";
 import { AutomationsTable } from "./components/AutomationsTable";
-import { CreateAutomationDialog } from "./components/CreateAutomationDialog";
 import { Header } from "./components/Header";
 import { KpiCards } from "./components/KpiCards";
 import { TodaySchedule } from "./components/TodaySchedule";
@@ -18,7 +19,11 @@ import {
 import { matchesSearch } from "./lib/search";
 
 function App() {
-  const [dialogOpen, setDialogOpen] = useState(false);
+  // The dialog does double duty: `automation: null` -> create, otherwise edit.
+  const [dialog, setDialog] = useState<{
+    open: boolean;
+    automation: Automation | null;
+  }>({ open: false, automation: null });
 
   // Table filters — all applied client-side (see below).
   const [search, setSearch] = useState("");
@@ -45,7 +50,9 @@ function App() {
   return (
     <Box sx={{ bgcolor: "background.default", minHeight: "100vh", py: 4 }}>
       <Container maxWidth="lg">
-        <Header onCreate={() => setDialogOpen(true)} />
+        <Header
+          onCreate={() => setDialog({ open: true, automation: null })}
+        />
 
         <KpiCards
           kpis={kpis}
@@ -68,14 +75,16 @@ function App() {
           rows={rows}
           search={search}
           onSearchChange={setSearch}
+          onEdit={(automation) => setDialog({ open: true, automation })}
           onRecordRun={(id) => recordRun.mutate({ id })}
           onDelete={(id) => deleteAutomation.mutate(id)}
         />
       </Container>
 
-      <CreateAutomationDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+      <AutomationDialog
+        open={dialog.open}
+        automation={dialog.automation}
+        onClose={() => setDialog((d) => ({ ...d, open: false }))}
       />
     </Box>
   );

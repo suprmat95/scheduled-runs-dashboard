@@ -28,6 +28,14 @@ export function formatDateTime(value: string | null | undefined): string {
   return `${date} ${time}`;
 }
 
+// A local "YYYY-MM-DDTHH:MM" string for an <input type="datetime-local">.
+export function toDatetimeLocal(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours(),
+  )}:${pad(d.getMinutes())}`;
+}
+
 // Just the HH:MM part, for the schedule/time columns.
 export function formatTime(value: string | null | undefined): string {
   if (!value) return "—";

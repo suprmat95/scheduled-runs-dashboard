@@ -8,7 +8,9 @@ import {
   fetchMatching,
   fetchRuns,
   recordRun,
+  updateAutomation,
 } from "../api/automations";
+import type { CreateAutomationInput } from "../api/types";
 import { todayIso, yesterdayIso } from "../lib/dates";
 
 // Central query keys so invalidation after a mutation stays consistent.
@@ -56,6 +58,15 @@ export function useCreateAutomation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: createAutomation,
+    onSuccess: () => invalidateDashboard(qc),
+  });
+}
+
+export function useUpdateAutomation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: number; input: CreateAutomationInput }) =>
+      updateAutomation(id, input),
     onSuccess: () => invalidateDashboard(qc),
   });
 }
