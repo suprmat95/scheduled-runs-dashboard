@@ -40,12 +40,12 @@ make setup        # venv + install + migrate + seed
 make run          # http://127.0.0.1:8000
 ```
 
-Frontend (Node 18+):
+Frontend (Node 20+; `frontend/Makefile` activates it via nvm automatically):
 
 ```bash
 cd frontend
-npm install
-npm run dev       # http://localhost:5173
+make install
+make dev          # http://localhost:5173
 ```
 
 The frontend proxies `/api` to the backend, so start the backend too. Override
@@ -58,7 +58,7 @@ the proxy target with `VITE_API_PROXY_TARGET` if needed.
 cd backend && make test          # or: .venv/bin/python manage.py test
 
 # frontend (Vitest) — search + crontab mapping (pure logic)
-cd frontend && npm test
+cd frontend && make test
 ```
 
 ## Frontend
