@@ -54,12 +54,32 @@ the proxy target with `VITE_API_PROXY_TARGET` if needed.
 ## Tests
 
 ```bash
-# backend (Django) — models, signals, API, cache invalidation
-cd backend && make test          # or: .venv/bin/python manage.py test
-
-# frontend (Vitest) — search + crontab mapping (pure logic)
-cd frontend && make test
+cd backend  && make test    # Django — 29 tests
+cd frontend && make test    # Vitest — 17 tests
 ```
+
+**Backend** (`backend/automations/tests/`):
+
+- `test_models.py` — crontab validation, `schedule_display` rendering, and
+  `next_run_at` computation (set for active, cleared when inactive, recomputed
+  on save).
+- `test_signals.py` — the signal-driven denormalization: creating a run updates
+  `last_run_*`, the latest run wins, and deleting reverts to the previous run
+  (or clears it).
+- `test_api.py` — CRUD, `?active=` / `?last_run_status=` filters, pagination,
+  the KPIs and matching endpoints, and recording a run.
+- `test_cache.py` — the read endpoints cache, and any Automation/AutomationRun
+  write clears the cache (so a later read reflects the change).
+
+**Frontend** (`frontend/src/lib/*.test.ts`):
+
+- `cron.test.ts` — the Repetition ⇄ crontab mapping, including the round-trip
+  that keeps an unedited "Edit" a no-op.
+- `search.test.ts` — the client-side search across every displayed field
+  (the "09:00 matches schedule and last-run" requirement).
+
+The frontend suite needs Node 20+ (Vitest 4); `make test` selects it via
+`.nvmrc`.
 
 ## Frontend
 
