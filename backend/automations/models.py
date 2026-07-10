@@ -8,7 +8,7 @@ from django.utils import timezone
 try:
     from cron_descriptor import Options, get_description
 
-    # Force a single locale so the rendered text is consistent regardless of the
+    # Force english so the rendered text is consistent regardless of the
     # server's environment (otherwise cron_descriptor auto-detects and can mix
     # languages, e.g. "Alle 09:00, solo il Monday").
     _CRON_OPTS = Options()
