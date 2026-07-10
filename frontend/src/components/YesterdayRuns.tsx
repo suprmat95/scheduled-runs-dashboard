@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
-import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
+import ScheduleIcon from "@mui/icons-material/Schedule";
 import Divider from "@mui/material/Divider";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -50,10 +50,7 @@ export function YesterdayRuns() {
               spacing={1}
               sx={{ alignItems: "center" }}
             >
-              <RadioButtonUncheckedIcon
-                fontSize="small"
-                sx={{ color: "text.disabled" }}
-              />
+              <ScheduleIcon fontSize="small" sx={{ color: "text.disabled" }} />
               <Typography>
                 {nameById.get(run.automation) ?? `#${run.automation}`}
               </Typography>
