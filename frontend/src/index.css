@@ -4,3 +4,9 @@ body,
 #root {
   height: 100%;
 }
+
+/* Always reserve the scrollbar's space so the centered layout doesn't jump
+   sideways when filtering/searching changes the page height. */
+html {
+  scrollbar-gutter: stable;
+}

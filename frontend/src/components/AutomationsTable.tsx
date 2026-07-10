@@ -1,6 +1,7 @@
 import { useEffect, useState, type MouseEvent } from "react";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import SearchIcon from "@mui/icons-material/Search";
+import SearchOffIcon from "@mui/icons-material/SearchOff";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
@@ -51,6 +52,11 @@ export function AutomationsTable({
 
   const pageRows = rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
+  // Fixed-height scroll area (≈ a 10-row page). Because the panel height never
+  // changes with the result count, the page can't reflow and the search bar
+  // stays put while you type; rows beyond what fits scroll inside this area.
+  const BODY_HEIGHT = 440;
+
   // Row-action menu: track which row's "…" opened it.
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
   const [menuRow, setMenuRow] = useState<Automation | null>(null);
@@ -96,8 +102,12 @@ export function AutomationsTable({
         />
       </Stack>
 
-      <TableContainer sx={{ overflowX: "auto" }}>
-        <Table size="small">
+      <TableContainer sx={{ height: BODY_HEIGHT, overflow: "auto" }}>
+        <Table
+          size="small"
+          stickyHeader
+          sx={{ "& thead th": { bgcolor: "background.paper" } }}
+        >
           <TableHead>
             <TableRow>
               <TableCell>Name</TableCell>
@@ -111,10 +121,26 @@ export function AutomationsTable({
           <TableBody>
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6}>
-                  <Typography color="text.secondary" sx={{ py: 2 }}>
-                    No automations match your filters.
-                  </Typography>
+                <TableCell colSpan={6} sx={{ border: 0 }}>
+                  <Stack
+                    spacing={1}
+                    sx={{
+                      alignItems: "center",
+                      justifyContent: "center",
+                      py: 7,
+                      color: "text.secondary",
+                    }}
+                  >
+                    <SearchOffIcon sx={{ fontSize: 44, opacity: 0.45 }} />
+                    <Typography sx={{ fontWeight: 600, color: "text.primary" }}>
+                      No automations found
+                    </Typography>
+                    <Typography variant="body2">
+                      {search.trim()
+                        ? `Nothing matches “${search.trim()}”.`
+                        : "Try adjusting the filters above."}
+                    </Typography>
+                  </Stack>
                 </TableCell>
               </TableRow>
             )}
@@ -160,20 +186,20 @@ export function AutomationsTable({
         </Table>
       </TableContainer>
 
-      {rows.length > 0 && (
-        <TablePagination
-          component="div"
-          count={rows.length}
-          page={page}
-          onPageChange={(_, next) => setPage(next)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(e) => {
-            setRowsPerPage(parseInt(e.target.value, 10));
-            setPage(0);
-          }}
-          rowsPerPageOptions={[10, 25, 50]}
-        />
-      )}
+      {/* Always rendered (even with 0 rows) so the panel height — and the search
+          bar above it — stays put when a search yields no results. */}
+      <TablePagination
+        component="div"
+        count={rows.length}
+        page={page}
+        onPageChange={(_, next) => setPage(next)}
+        rowsPerPage={rowsPerPage}
+        onRowsPerPageChange={(e) => {
+          setRowsPerPage(parseInt(e.target.value, 10));
+          setPage(0);
+        }}
+        rowsPerPageOptions={[10, 25, 50]}
+      />
 
       <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={closeMenu}>
         <MenuItem

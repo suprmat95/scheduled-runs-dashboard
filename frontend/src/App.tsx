@@ -85,6 +85,11 @@ function App() {
           kpis={kpis}
           activeFilter={activeOnly}
           successFilter={successOnly}
+          onShowAll={() => {
+            setActiveOnly(false);
+            setSuccessOnly(false);
+            setSearch("");
+          }}
           onToggleActive={() => setActiveOnly((v) => !v)}
           onToggleSuccess={() => setSuccessOnly((v) => !v)}
         />

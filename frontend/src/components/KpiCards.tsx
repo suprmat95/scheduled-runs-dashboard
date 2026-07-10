@@ -62,6 +62,7 @@ interface Props {
   kpis?: Kpis;
   activeFilter: boolean;
   successFilter: boolean;
+  onShowAll: () => void;
   onToggleActive: () => void;
   onToggleSuccess: () => void;
 }
@@ -70,6 +71,7 @@ export function KpiCards({
   kpis,
   activeFilter,
   successFilter,
+  onShowAll,
   onToggleActive,
   onToggleSuccess,
 }: Props) {
@@ -80,6 +82,9 @@ export function KpiCards({
         icon={<AppsIcon />}
         label="Total Automations"
         value={kpis?.total_automations ?? dash}
+        // Highlighted when no filter narrows the table — i.e. all are shown.
+        active={!activeFilter && !successFilter}
+        onClick={onShowAll}
       />
       <KpiCard
         icon={<BoltIcon />}
