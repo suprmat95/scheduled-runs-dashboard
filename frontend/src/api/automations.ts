@@ -16,13 +16,23 @@ export async function fetchKpis(): Promise<Kpis> {
   return data;
 }
 
-// The dashboard filters/searches client-side, so we pull the full list in one
-// page (the dataset is small). page_size is capped at 200 by the backend.
+// The dashboard filters/searches/paginates client-side, so it needs the full
+// list. The backend caps page_size at 200, so we walk the pages until there's
+// no `next` — no silent truncation, and correct however many rows exist.
+// (For very large datasets this is where you'd switch to server-side; see the
+// README's design notes.)
 export async function fetchAutomations(): Promise<Automation[]> {
-  const { data } = await api.get<Paginated<Automation>>("/automations/", {
-    params: { page_size: 200 },
-  });
-  return data.results;
+  const all: Automation[] = [];
+  let page = 1;
+  for (;;) {
+    const { data } = await api.get<Paginated<Automation>>("/automations/", {
+      params: { page, page_size: 200 },
+    });
+    all.push(...data.results);
+    if (!data.next) break;
+    page += 1;
+  }
+  return all;
 }
 
 export async function fetchMatching(date?: string): Promise<MatchingResponse> {

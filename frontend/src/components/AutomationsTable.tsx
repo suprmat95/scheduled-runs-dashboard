@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import SearchIcon from "@mui/icons-material/Search";
 import Box from "@mui/material/Box";
@@ -14,6 +14,7 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
+import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
@@ -39,6 +40,17 @@ export function AutomationsTable({
   onRecordRun,
   onDelete,
 }: Props) {
+  // Client-side pagination of the (already filtered/searched) rows. This paginates
+  // only the *display*; the full list is loaded so search still spans everything.
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // A changed filter/search can shrink the list below the current page — jump
+  // back to the first page so the user isn't left staring at an empty one.
+  useEffect(() => setPage(0), [rows]);
+
+  const pageRows = rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
   // Row-action menu: track which row's "…" opened it.
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
   const [menuRow, setMenuRow] = useState<Automation | null>(null);
@@ -106,7 +118,7 @@ export function AutomationsTable({
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((a) => (
+            {pageRows.map((a) => (
               <TableRow key={a.id} hover>
                 <TableCell sx={{ fontWeight: 600 }}>{a.name}</TableCell>
                 <TableCell>{a.schedule_display}</TableCell>
@@ -147,6 +159,21 @@ export function AutomationsTable({
           </TableBody>
         </Table>
       </TableContainer>
+
+      {rows.length > 0 && (
+        <TablePagination
+          component="div"
+          count={rows.length}
+          page={page}
+          onPageChange={(_, next) => setPage(next)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[10, 25, 50]}
+        />
+      )}
 
       <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={closeMenu}>
         <MenuItem

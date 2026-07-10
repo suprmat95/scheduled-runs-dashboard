@@ -85,11 +85,12 @@ The frontend suite needs Node 20+ (Vitest 4); `make test` selects it via
 
 React 19 + TypeScript + MUI, data fetched with React Query. It renders the
 mockup: KPI cards (total / active / success rate), today's schedule, yesterday's
-runs, and a table of all automations. The **active** and **success rate** KPI
-cards toggle table filters, and the search box matches across every displayed
-field client-side (e.g. "09:00" hits both the schedule and last-run columns).
-The Create dialog builds a crontab from a Repetition + Start Date; rows can
-record a run or be deleted.
+runs, and a paginated table of all automations. The **active** and **success
+rate** KPI cards toggle table filters, and the search box matches across every
+displayed field client-side (e.g. "09:00" hits both the schedule and last-run
+columns). The Create/Edit dialog builds a crontab from a Repetition + Start Date
+(and reverses it when editing); rows can be edited, record a run, or be deleted
+(with confirmation).
 
 ## Backend API
 
@@ -150,11 +151,18 @@ curl "http://127.0.0.1:8000/api/automations/matching/?date=2026-07-07"
   `cache.clear()` over a version-key scheme because `matching` has one entry per date
   (no cheap key enumeration) and this cache is used only by these endpoints — so the
   bluntness costs nothing here, while staying trivial to reason about.
-- **Filter and search client-side.** The dataset is small and the search must span
-  every *displayed* field (e.g. "09:00" matches both the schedule and last-run
-  columns); doing it in the browser over already-rendered values is simplest and
-  keeps search consistent with what's on screen. The server-side `?active=` /
-  `?last_run_status=` filters remain available for scale.
+- **Filter, search and paginate client-side.** The search must span every
+  *displayed* field (e.g. "09:00" matches both the schedule and last-run columns),
+  which needs all rows in the browser; doing filtering there too is simplest and
+  keeps search consistent with what's on screen. So the frontend loads the full
+  list (walking the backend's pages, no silent cap) and paginates only the
+  *display* with a `TablePagination` — filters/search apply first, then the result
+  is paged. The trade-off: it holds every row in memory, which is fine into the
+  low thousands. **To scale beyond that** you'd move pagination *and* search/filter
+  server-side (the backend is already paginated, and the removed `search_text`
+  denormalization is the hook for a server-side search) — at the cost of search no
+  longer spanning arbitrary rendered text for free. The server-side `?active=` /
+  `?last_run_status=` filters already exist for that path.
 - **Docker keeps the DB shareable.** SQLite is bind-mounted to `backend/db.sqlite3`
   on the host, so it persists and stays inspectable (the exercise's "share the DB
   file"); `seed --if-empty` avoids wiping it on every startup.
