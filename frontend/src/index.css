@@ -1,0 +1,6 @@
+/* MUI's CssBaseline handles the reset; keep only full-height roots. */
+html,
+body,
+#root {
+  height: 100%;
+}
