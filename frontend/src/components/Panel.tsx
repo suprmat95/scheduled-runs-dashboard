@@ -6,12 +6,13 @@ import Typography from "@mui/material/Typography";
 
 interface Props {
   icon: ReactNode;
-  title: string;
+  title: ReactNode;
+  action?: ReactNode; // optional right-aligned control (e.g. a date picker)
   children: ReactNode;
 }
 
 // Titled white card used by the two dashboard lists and the table section.
-export function Panel({ icon, title, children }: Props) {
+export function Panel({ icon, title, action, children }: Props) {
   return (
     <Paper sx={{ p: 2.5, flex: 1, minWidth: 0 }}>
       <Stack
@@ -23,6 +24,7 @@ export function Panel({ icon, title, children }: Props) {
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
           {title}
         </Typography>
+        {action && <Box sx={{ ml: "auto" }}>{action}</Box>}
       </Stack>
       {children}
     </Paper>

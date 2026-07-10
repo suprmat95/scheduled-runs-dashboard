@@ -1,3 +1,4 @@
+import { useState } from "react";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import Box from "@mui/material/Box";
@@ -5,21 +6,33 @@ import Divider from "@mui/material/Divider";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
-import { useTodaySchedule } from "../hooks";
-import { formatTime } from "../lib/dates";
+import { useMatching } from "../hooks";
+import { formatTime, todayIso } from "../lib/dates";
+import { DateFilterButton } from "./DateFilterButton";
 import { Panel } from "./Panel";
 
-// Active automations scheduled to fire today, with their firing time.
+// Active automations scheduled to fire on the selected day (today by default).
 export function TodaySchedule() {
-  const { data, isLoading, isError } = useTodaySchedule();
+  const [date, setDate] = useState(todayIso());
+  const { data, isLoading, isError } = useMatching(date);
   const rows = data?.results ?? [];
 
   return (
-    <Panel icon={<CalendarTodayIcon fontSize="small" />} title="Today's Schedule">
+    <Panel
+      icon={<CalendarTodayIcon fontSize="small" />}
+      title="Schedule"
+      action={
+        <DateFilterButton
+          date={date}
+          onChange={setDate}
+          quick={[{ label: "Today", value: todayIso() }]}
+        />
+      }
+    >
       {isLoading && <Typography color="text.secondary">Loading…</Typography>}
       {isError && <Typography color="error">Failed to load.</Typography>}
       {!isLoading && !isError && rows.length === 0 && (
-        <Typography color="text.secondary">Nothing scheduled today.</Typography>
+        <Typography color="text.secondary">Nothing scheduled.</Typography>
       )}
       <Stack divider={<Divider flexItem />}>
         {rows.map((a) => (
@@ -32,11 +45,7 @@ export function TodaySchedule() {
               justifyContent: "space-between",
             }}
           >
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{ alignItems: "center" }}
-            >
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
               <ScheduleIcon fontSize="small" sx={{ color: "text.disabled" }} />
               <Typography>{a.name}</Typography>
             </Stack>

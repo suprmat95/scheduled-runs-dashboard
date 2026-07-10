@@ -29,16 +29,16 @@ export function useAutomations() {
   return useQuery({ queryKey: keys.automations, queryFn: fetchAutomations });
 }
 
-export function useTodaySchedule() {
-  const date = todayIso();
+// Automations scheduled to run on a given day (defaults to today).
+export function useMatching(date: string = todayIso()) {
   return useQuery({
     queryKey: keys.matching(date),
     queryFn: () => fetchMatching(date),
   });
 }
 
-export function useYesterdayRuns() {
-  const date = yesterdayIso();
+// Runs that happened on a given day (defaults to yesterday).
+export function useRuns(date: string = yesterdayIso()) {
   return useQuery({
     queryKey: keys.runs(date),
     queryFn: () => fetchRuns(date),

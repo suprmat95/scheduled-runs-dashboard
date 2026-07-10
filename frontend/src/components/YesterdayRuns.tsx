@@ -1,17 +1,20 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import Divider from "@mui/material/Divider";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
-import { useAutomations, useYesterdayRuns } from "../hooks";
+import { useAutomations, useRuns } from "../hooks";
+import { todayIso, yesterdayIso } from "../lib/dates";
+import { DateFilterButton } from "./DateFilterButton";
 import { Panel } from "./Panel";
 import { StatusChip } from "./StatusChip";
 
-// Runs that actually happened yesterday, each with its automation name + outcome.
+// Runs that actually happened on the selected day (yesterday by default).
 export function YesterdayRuns() {
-  const { data: runs, isLoading, isError } = useYesterdayRuns();
+  const [date, setDate] = useState(yesterdayIso());
+  const { data: runs, isLoading, isError } = useRuns(date);
   const { data: automations } = useAutomations();
 
   // Runs reference their automation by id; resolve names from the list we
@@ -27,12 +30,22 @@ export function YesterdayRuns() {
   return (
     <Panel
       icon={<EventAvailableIcon fontSize="small" />}
-      title="Yesterday's Runs"
+      title="Runs"
+      action={
+        <DateFilterButton
+          date={date}
+          onChange={setDate}
+          quick={[
+            { label: "Yesterday", value: yesterdayIso() },
+            { label: "Today", value: todayIso() },
+          ]}
+        />
+      }
     >
       {isLoading && <Typography color="text.secondary">Loading…</Typography>}
       {isError && <Typography color="error">Failed to load.</Typography>}
       {!isLoading && !isError && rows.length === 0 && (
-        <Typography color="text.secondary">No runs yesterday.</Typography>
+        <Typography color="text.secondary">No runs on this day.</Typography>
       )}
       <Stack divider={<Divider flexItem />}>
         {rows.map((run) => (
@@ -45,11 +58,7 @@ export function YesterdayRuns() {
               justifyContent: "space-between",
             }}
           >
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{ alignItems: "center" }}
-            >
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
               <ScheduleIcon fontSize="small" sx={{ color: "text.disabled" }} />
               <Typography>
                 {nameById.get(run.automation) ?? `#${run.automation}`}
