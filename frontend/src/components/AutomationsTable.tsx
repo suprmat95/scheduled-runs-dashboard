@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import SearchIcon from "@mui/icons-material/Search";
 import SearchOffIcon from "@mui/icons-material/SearchOff";
@@ -17,12 +17,15 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
+import TableSortLabel from "@mui/material/TableSortLabel";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import type { Automation } from "../api/types";
 import { formatDateTime } from "../lib/dates";
 import { StatusChip } from "./StatusChip";
+
+type SortKey = "name" | "schedule" | "active" | "last_run_at" | "next_run_at";
 
 interface Props {
   rows: Automation[];
@@ -41,16 +44,55 @@ export function AutomationsTable({
   onRecordRun,
   onDelete,
 }: Props) {
-  // Client-side pagination of the (already filtered/searched) rows. This paginates
-  // only the *display*; the full list is loaded so search still spans everything.
+  // Client-side sort. Columns differ in kind: name is alphabetical, status is by
+  // the active flag, and the date/schedule columns are chronological (Schedule
+  // sorts by next_run_at — "soonest to latest"). null dates (never run / inactive)
+  // always sort last, regardless of direction, so empty rows don't clutter the top.
+  const [orderBy, setOrderBy] = useState<SortKey | null>(null);
+  const [order, setOrder] = useState<"asc" | "desc">("asc");
+
+  const handleSort = (field: SortKey) => {
+    if (orderBy === field) {
+      setOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setOrderBy(field);
+      setOrder("asc");
+    }
+  };
+
+  const sortedRows = useMemo(() => {
+    if (!orderBy) return rows;
+    const dir = order === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      if (orderBy === "name") return dir * a.name.localeCompare(b.name);
+      if (orderBy === "active") {
+        if (a.active === b.active) return 0;
+        return dir * (a.active ? -1 : 1); // asc: active first
+      }
+      // date columns (Schedule uses the next firing time as its proximity)
+      const field = orderBy === "schedule" ? "next_run_at" : orderBy;
+      const x = a[field];
+      const y = b[field];
+      if (x === null && y === null) return 0;
+      if (x === null) return 1; // nulls last, independent of direction
+      if (y === null) return -1;
+      return dir * (new Date(x).getTime() - new Date(y).getTime());
+    });
+  }, [rows, orderBy, order]);
+
+  // Client-side pagination of the (already filtered/searched/sorted) rows. This
+  // paginates only the *display*; the full list is loaded so search spans all.
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  // A changed filter/search can shrink the list below the current page — jump
-  // back to the first page so the user isn't left staring at an empty one.
-  useEffect(() => setPage(0), [rows]);
+  // A changed filter/search/sort can move rows around — jump back to the first
+  // page so the user isn't left staring at an empty or stale one.
+  useEffect(() => setPage(0), [rows, orderBy, order]);
 
-  const pageRows = rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const pageRows = sortedRows.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
 
   // Fixed-height scroll area (≈ a 10-row page). Because the panel height never
   // changes with the result count, the page can't reflow and the search bar
@@ -110,11 +152,51 @@ export function AutomationsTable({
         >
           <TableHead>
             <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Schedule</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Last Run</TableCell>
-              <TableCell>Next Run</TableCell>
+              <TableCell sortDirection={orderBy === "name" ? order : false}>
+                <TableSortLabel
+                  active={orderBy === "name"}
+                  direction={orderBy === "name" ? order : "asc"}
+                  onClick={() => handleSort("name")}
+                >
+                  Name
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sortDirection={orderBy === "schedule" ? order : false}>
+                <TableSortLabel
+                  active={orderBy === "schedule"}
+                  direction={orderBy === "schedule" ? order : "asc"}
+                  onClick={() => handleSort("schedule")}
+                >
+                  Schedule
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sortDirection={orderBy === "active" ? order : false}>
+                <TableSortLabel
+                  active={orderBy === "active"}
+                  direction={orderBy === "active" ? order : "asc"}
+                  onClick={() => handleSort("active")}
+                >
+                  Status
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sortDirection={orderBy === "last_run_at" ? order : false}>
+                <TableSortLabel
+                  active={orderBy === "last_run_at"}
+                  direction={orderBy === "last_run_at" ? order : "asc"}
+                  onClick={() => handleSort("last_run_at")}
+                >
+                  Last Run
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sortDirection={orderBy === "next_run_at" ? order : false}>
+                <TableSortLabel
+                  active={orderBy === "next_run_at"}
+                  direction={orderBy === "next_run_at" ? order : "asc"}
+                  onClick={() => handleSort("next_run_at")}
+                >
+                  Next Run
+                </TableSortLabel>
+              </TableCell>
               <TableCell align="right" />
             </TableRow>
           </TableHead>
