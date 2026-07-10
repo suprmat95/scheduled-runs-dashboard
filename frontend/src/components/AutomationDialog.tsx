@@ -14,6 +14,7 @@ import Typography from "@mui/material/Typography";
 
 import type { Automation } from "../api/types";
 import { useCreateAutomation, useUpdateAutomation } from "../hooks";
+import { useNotify } from "./Notifications";
 import {
   REPETITION_OPTIONS,
   crontabToForm,
@@ -43,6 +44,7 @@ export function AutomationDialog({ open, onClose, automation }: Props) {
   const [startDate, setStartDate] = useState(defaultStart);
   const [active, setActive] = useState(true);
 
+  const notify = useNotify();
   const create = useCreateAutomation();
   const update = useUpdateAutomation();
   const mutation = isEdit ? update : create;
@@ -81,7 +83,10 @@ export function AutomationDialog({ open, onClose, automation }: Props) {
       start_date: start.toISOString(),
       active,
     };
-    const onSuccess = () => onClose();
+    const onSuccess = () => {
+      notify(isEdit ? "Automation updated" : "Automation created");
+      onClose();
+    };
     if (isEdit && automation) {
       update.mutate({ id: automation.id, input }, { onSuccess });
     } else {

@@ -28,7 +28,7 @@ interface Props {
   onSearchChange: (value: string) => void;
   onEdit: (automation: Automation) => void;
   onRecordRun: (id: number) => void;
-  onDelete: (id: number) => void;
+  onDelete: (automation: Automation) => void;
 }
 
 export function AutomationsTable({
@@ -168,7 +168,7 @@ export function AutomationsTable({
         <MenuItem
           sx={{ color: "error.main" }}
           onClick={() => {
-            if (menuRow) onDelete(menuRow.id);
+            if (menuRow) onDelete(menuRow);
             closeMenu();
           }}
         >
