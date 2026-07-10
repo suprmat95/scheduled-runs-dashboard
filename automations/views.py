@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 from croniter import croniter_range
+from django.core.cache import cache
 from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -88,8 +89,17 @@ class AutomationViewSet(viewsets.ModelViewSet):
     def kpis(self, request):
         """Summary KPIs: total, active, and success rate over last runs.
 
-        A single aggregate query — O(1) work in Python regardless of row count.
+        All three come from one aggregate query, so they're cached together as a
+        single entry (cleared on any Automation/AutomationRun write via signals).
+        Caching here is marginal — the query is already O(1) in Python — but it
+        applies the pattern consistently and removes the query under high read
+        volume.
         """
+        payload = cache.get_or_set("automations:kpis", self._compute_kpis)
+        return Response(payload)
+
+    def _compute_kpis(self):
+        """Build the KPI payload (the cache-miss path)."""
         agg = Automation.objects.aggregate(
             total=Count("id"),
             active=Count("id", filter=Q(active=True)),
@@ -103,14 +113,11 @@ class AutomationViewSet(viewsets.ModelViewSet):
             if agg["with_runs"]
             else 0
         )
-
-        return Response(
-            {
-                "total_automations": agg["total"],
-                "active_schedules": agg["active"],
-                "success_rate": rate,
-            }
-        )
+        return {
+            "total_automations": agg["total"],
+            "active_schedules": agg["active"],
+            "success_rate": rate,
+        }
 
     @action(detail=False, methods=["get"])
     def matching(self, request):
@@ -138,10 +145,19 @@ class AutomationViewSet(viewsets.ModelViewSet):
         else:
             day = timezone.localdate()
 
+        # Recomputing the per-day firing times (croniter over every active
+        # automation) is the priciest read here, and the result is identical for
+        # every visitor until an automation changes. Cache it per date; any
+        # Automation/AutomationRun write clears the cache (signals).
+        key = f"automations:matching:{day.isoformat()}"
+        payload = cache.get_or_set(key, lambda: self._compute_matching(day))
+        return Response(payload)
+
+    def _compute_matching(self, day):
+        """Build the matching payload for `day` (the cache-miss path)."""
         start = timezone.make_aware(datetime.combine(day, datetime.min.time()))
         end = start + timedelta(days=1)
 
-        # --- collect automations firing that day ---
         results = []
         for automation in Automation.objects.filter(active=True):
             fires_at = _first_firing_in_window(automation.crontab, start, end)
@@ -151,7 +167,7 @@ class AutomationViewSet(viewsets.ModelViewSet):
                 results.append(item)
 
         results.sort(key=lambda i: i["matched_at"])
-        return Response({"date": day, "count": len(results), "results": results})
+        return {"date": day, "count": len(results), "results": results}
 
     @action(detail=True, methods=["post"])
     def run(self, request, pk=None):

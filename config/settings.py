@@ -60,6 +60,25 @@ DATABASES = {
     }
 }
 
+# Cache framework. Explicit in-process (local-memory) backend for the exercise.
+#
+# The application code talks only to Django's cache API (caches["default"]), so
+# it's backend-agnostic: swapping to a shared store is config-only, no code
+# changes. For a multi-worker deployment, replace BACKEND with a Redis backend,
+# e.g.
+#     "BACKEND": "django.core.cache.backends.redis.RedisCache",
+#     "LOCATION": "redis://127.0.0.1:6379",
+# which also makes cache invalidation effective across workers: with LocMemCache
+# each process has its own cache, so a write on one worker only clears that
+# worker's copy; a shared Redis store is cleared once for all of them.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "cargoful-automations",
+        "TIMEOUT": 300,  # default entry lifetime (seconds); overridable per call
+    }
+}
+
 AUTH_PASSWORD_VALIDATORS = []
 
 LANGUAGE_CODE = "en-us"

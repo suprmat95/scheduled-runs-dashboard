@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from croniter import croniter
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -14,6 +16,24 @@ try:
 except ImportError:  # cron_descriptor is optional (nice-to-have display)
     get_description = None
     _CRON_OPTS = None
+
+
+@lru_cache(maxsize=512)
+def describe_crontab(crontab):
+    """Human-readable rendering of a crontab, e.g. 'At 09:00, only on Monday'.
+
+    Memoized because it's a pure function of the crontab string: cron_descriptor
+    is re-run only once per distinct expression instead of on every serialization
+    of every row. The cache can never go stale — the output depends solely on the
+    input — so no invalidation is needed. Bounded size caps memory if many
+    distinct expressions are seen over a long-running process.
+    """
+    if get_description is None:
+        return crontab
+    try:
+        return get_description(crontab, _CRON_OPTS)
+    except Exception:
+        return crontab
 
 
 def validate_crontab(value):
@@ -70,12 +90,7 @@ class Automation(models.Model):
     @property
     def schedule_display(self):
         """Human-readable schedule, e.g. 'At 09:00, only on Monday'."""
-        if get_description is not None:
-            try:
-                return get_description(self.crontab, _CRON_OPTS)
-            except Exception:
-                pass
-        return self.crontab
+        return describe_crontab(self.crontab)
 
     # ------------------------------------------------------- denormalization ---
     def compute_next_run(self):
