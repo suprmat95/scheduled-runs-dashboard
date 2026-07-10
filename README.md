@@ -51,6 +51,16 @@ npm run dev       # http://localhost:5173
 The frontend proxies `/api` to the backend, so start the backend too. Override
 the proxy target with `VITE_API_PROXY_TARGET` if needed.
 
+## Tests
+
+```bash
+# backend (Django) — models, signals, API, cache invalidation
+cd backend && make test          # or: .venv/bin/python manage.py test
+
+# frontend (Vitest) — search + crontab mapping (pure logic)
+cd frontend && npm test
+```
+
 ## Frontend
 
 React 19 + TypeScript + MUI, data fetched with React Query. It renders the
@@ -102,3 +112,29 @@ curl "http://127.0.0.1:8000/api/automations/matching/"
 # automations running on July 7th
 curl "http://127.0.0.1:8000/api/automations/matching/?date=2026-07-07"
 ```
+
+## Design decisions & trade-offs
+
+- **Crontab as the single source of truth.** Schedules are stored as one crontab
+  field; the human-readable label (`schedule_display`) is derived from it, and the
+  Create/Edit form maps a friendly *Repetition + Start Date* onto a crontab (and
+  back, so editing round-trips). This keeps the model expressive without exposing
+  raw cron to the user.
+- **Denormalize for reads, keep it honest with signals.** `next_run_at` is computed
+  on save; `last_run_at` / `last_run_status` are materialized onto the row and kept
+  in sync by `post_save`/`post_delete` signals on `AutomationRun`. Listing, filtering
+  and the KPI aggregate then avoid per-row subqueries / N+1. The cost is write-time
+  work and the discipline of centralizing sync in one place (signals).
+- **Cache the expensive reads, invalidate simply.** `matching` (croniter per active
+  automation) and `kpis` are cached; any write clears the cache via a signal. I chose
+  `cache.clear()` over a version-key scheme because `matching` has one entry per date
+  (no cheap key enumeration) and this cache is used only by these endpoints — so the
+  bluntness costs nothing here, while staying trivial to reason about.
+- **Filter and search client-side.** The dataset is small and the search must span
+  every *displayed* field (e.g. "09:00" matches both the schedule and last-run
+  columns); doing it in the browser over already-rendered values is simplest and
+  keeps search consistent with what's on screen. The server-side `?active=` /
+  `?last_run_status=` filters remain available for scale.
+- **Docker keeps the DB shareable.** SQLite is bind-mounted to `backend/db.sqlite3`
+  on the host, so it persists and stays inspectable (the exercise's "share the DB
+  file"); `seed --if-empty` avoids wiping it on every startup.
