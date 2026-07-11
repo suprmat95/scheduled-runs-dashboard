@@ -84,13 +84,20 @@ The frontend suite needs Node 20+ (Vitest 4); `make test` selects it via
 ## Frontend
 
 React 19 + TypeScript + MUI, data fetched with React Query. It renders the
-mockup: KPI cards (total / active / success rate), today's schedule, yesterday's
-runs, and a paginated table of all automations. The **active** and **success
-rate** KPI cards toggle table filters, and the search box matches across every
-displayed field client-side (e.g. "09:00" hits both the schedule and last-run
-columns). The Create/Edit dialog builds a crontab from a Repetition + Start Date
-(and reverses it when editing); rows can be edited, record a run, or be deleted
-(with confirmation).
+mockup and adds a few extras:
+
+- **KPI cards** (total / active / success rate) — all three are clickable:
+  *Total* clears every filter, *Active Schedules* and *Success Rate* toggle
+  their respective table filters.
+- **Schedule** and **Runs** panels are date-navigable — a date picker browses
+  automations scheduled on (`/matching/`) or runs that happened on (`/runs/`)
+  any chosen day, defaulting to today / yesterday.
+- **All Automations** table with client-side search across every displayed
+  field (e.g. "09:00" hits both the schedule and last-run columns), sortable
+  columns (name, schedule, status, last/next run), and pagination.
+- **Create/Edit dialog** builds a crontab from a Repetition + Start Date (and
+  reverses it when editing); rows can be edited, record a run, or be deleted
+  (with a confirmation dialog). Mutations show toast feedback.
 
 ## Backend API
 
@@ -151,10 +158,10 @@ curl "http://127.0.0.1:8000/api/automations/matching/?date=2026-07-07"
   `cache.clear()` over a version-key scheme because `matching` has one entry per date
   (no cheap key enumeration) and this cache is used only by these endpoints — so the
   bluntness costs nothing here, while staying trivial to reason about.
-- **Filter, search and paginate client-side.** The search must span every
+- **Filter, search, sort and paginate client-side.** The search must span every
   *displayed* field (e.g. "09:00" matches both the schedule and last-run columns),
-  which needs all rows in the browser; doing filtering there too is simplest and
-  keeps search consistent with what's on screen. So the frontend loads the full
+  which needs all rows in the browser; doing filtering, sorting and paging there
+  too is simplest and keeps search consistent with what's on screen. So the frontend loads the full
   list (walking the backend's pages, no silent cap) and paginates only the
   *display* with a `TablePagination` — filters/search apply first, then the result
   is paged. The trade-off: it holds every row in memory, which is fine into the
