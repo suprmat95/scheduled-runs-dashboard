@@ -1,4 +1,4 @@
-# Cargoful Exercise — Automation Monitoring
+# Automation Monitoring
 
 SaaS-style page to monitor scheduled automations (Zapier style). Full-stack:
 a Django/DRF backend and a React dashboard.
